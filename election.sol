@@ -1,18 +1,39 @@
-pragma solidity ^0.4.4;
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.7.0;
+pragma experimental ABIEncoderV2;
+
+// /// Returns address from bytes32
+// function b2a(bytes32 b) pure returns (address) {
+//     return address(uint160(uint256(b)));
+// }
+
+// /// Returns bytes32 from an address
+// function a2b(address a) returns (bytes32) {
+//     return bytes32(uint256(addr));
+// }
 
 contract Election {
-    struct Candidate {
-        address candidateId;
-        string name;
+    struct Voter {
+        bool valid;
+        address candidate;
     }
 
-    Candidate[] public all_candidates_arr;
+    struct Candidate {
+        string name;
+        bool exists;
+        uint votes;
+    }
+
+    struct CandidateOverview {
+        string name;
+        address id;
+    }
+
+    CandidateOverview[] public candidates_arr;
     address public owner;
 
-    mapping(address => uint) private vote_count;
-    mapping(address => bool) private all_candidates;
-    mapping(address => address) private vote;
-    mapping(address => bool) private valid_voter;
+    mapping(address => Voter) private voters;
+    mapping(address => Candidate) private candidates;
 
     uint public start_time;
     uint public end_time;
@@ -20,85 +41,61 @@ contract Election {
     constructor(
         uint _start_time,
         uint _end_time,
-        address[] _valid_voter,
-        Candidate[] _all_candidates
-    ) public {
-        for(uint i = 0; i < _all_candidates.length; i++) {
-            vote_count[_all_candidates[i]] = 0;
+        address[] memory valid_voters,
+        address[] memory candidates_addr,
+        string[] memory candidates_name
+    ) {
+        for(uint i = 0; i < valid_voters.length; i++) {
+            voters[valid_voters[i]].valid = true;
         }
 
-        for(uint i = 0; i < _valid_voter.length; i++) {
-            valid_voter[_valid_voter[i]] = true;
+        for(uint i = 0; i < candidates_addr.length; i++) {
+            candidates[candidates_addr[i]].name = candidates_name[i];
+            candidates[candidates_addr[i]].exists = true;
+            candidates_arr.push(CandidateOverview({
+                name: candidates_name[i],
+                id: candidates_addr[i]
+            }));
         }
-
-        for(uint i = 0; i < all_candidates.length; i++) {
-            all_candidates[_all_candidates[i].candidateId] = true;
-        }
-
-        all_candidates_arr = _all_candidates;
 
         owner = msg.sender;
         start_time = _start_time;
         end_time = _end_time;
     }
 
-    function getOwner() public view returns (address) {
-        return owner;
-    }
-
-    function hasntVoted(address[] voters) public view returns (address[]) {
+    function hasVoted(address voter) public view returns (bool) {
         require(
             msg.sender == owner,
-            "Only election owner can search for who hasn't voted."
+            "Only election owner can search for who has voted."
         );
-        address[] non_voters;
+        require(block.timestamp > end_time, "You can only see who hasn't voted after the election.");
 
-        for(uint i = 0; i < voters.length; i++) {
-            if (vote[voters[i]] == 0) {
-                non_voters.push(voters[i]);
-            }
-        }
 
-        return non_voters;
+        return voters[voter].candidate != address(0);
     }
 
-    function getCandidates() public view returns (Candidate[]) {
-        return all_candidates_arr;
+    function getCandidates() public view returns (CandidateOverview[] memory) {
+        return candidates_arr;
     }
 
     function castVote(address candidate) public {
         require(block.timestamp >= start_time &&
                 block.timestamp <= end_time, "Cannot cast vote at this time.");
-        require(hasVoted(msg.sender), "You already voted.");
-        require(isValidVoter(msg.sender), "You are not a valid voter.");
-        require(all_candidates[candidate], "This candidate does not exist in this election.");
+        require(voters[msg.sender].candidate == address(0), "You already voted.");
+        require(voters[msg.sender].valid, "You are not a valid voter.");
+        require(candidates[candidate].exists, "This candidate does not exist in this election.");
 
-
-
-        vote_count[candidate] += 1;
-        vote[msg.sender] = candidate;
+        candidates[candidate].votes += 1;
+        voters[msg.sender].candidate = candidate;
     }
 
-    function getVote() public view returns (bool) {
-        return vote[msg.sender];
-    }
-
-    function canVote(address voter) public returns (bool) {
-        return (valid_voter[voter] && vote[voter] == 0);
-    }
-
-
-    function isValidVoter(address voter) public returns (bool) {
-        return valid_voter[voter];
-    }
-
-    function hasVoted(address voter) public returns (bool) {
-        return vote[voter] != 0;
+    function getVote() public view returns (address) {
+        return voters[msg.sender].candidate;
     }
 
     function getCandidateVotes(address candidate) public view returns (uint) {
-        require(block.timestamp > end_time, "Cannot get votes before end of election");
-        return vote_count[candidate];
+        require(block.timestamp > end_time, "Cannot get votes before end of election.");
+        return candidates[candidate].votes;
     }
 
 }
