@@ -27,7 +27,10 @@ contract Election {
     struct CandidateOverview {
         string name;
         address id;
+        uint votes;
     }
+
+    bool public votes_calculated = false;
 
     CandidateOverview[] public candidates_arr;
     address public owner;
@@ -45,16 +48,23 @@ contract Election {
         address[] memory candidates_addr,
         string[] memory candidates_name
     ) {
-        for(uint i = 0; i < valid_voters.length; i++) {
+
+        require(
+            candidates_addr.length == candidates_name.length,
+            "candidates_addr and candidates_name have different sizes"
+        );
+
+        for (uint i = 0; i < valid_voters.length; i++) {
             voters[valid_voters[i]].valid = true;
         }
 
-        for(uint i = 0; i < candidates_addr.length; i++) {
+        for (uint i = 0; i < candidates_addr.length; i++) {
             candidates[candidates_addr[i]].name = candidates_name[i];
             candidates[candidates_addr[i]].exists = true;
             candidates_arr.push(CandidateOverview({
                 name: candidates_name[i],
-                id: candidates_addr[i]
+                id: candidates_addr[i],
+                votes: 0
             }));
         }
 
@@ -68,7 +78,10 @@ contract Election {
             msg.sender == owner,
             "Only election owner can search for who has voted."
         );
-        require(block.timestamp > end_time, "You can only see who hasn't voted after the election.");
+        require(
+            block.timestamp > end_time,
+            "You can only see who hasn't voted after the election."
+        );
 
 
         return voters[voter].candidate != address(0);
@@ -96,6 +109,19 @@ contract Election {
     function getCandidateVotes(address candidate) public view returns (uint) {
         require(block.timestamp > end_time, "Cannot get votes before end of election.");
         return candidates[candidate].votes;
+    }
+
+    function calculateCandidatesVotes() public {
+        require(block.timestamp > end_time, "Cannot get votes before end of election.");
+        if (votes_calculated) {
+            return;
+        }
+
+        for (uint i = 0; i < candidates_arr.length; i++) {
+            candidates_arr[i].votes = candidates[candidates_arr[i].id].votes;
+        }
+
+        votes_calculated = true;
     }
 
 }
